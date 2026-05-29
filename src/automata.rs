@@ -11,7 +11,9 @@ pub struct Config {
     pub num_states: usize,
     pub num_enemies: usize,
     pub perturbation_rate: f64,
+    pub perturbation_enabled: bool,
     pub win_condition_change_rate: f64,
+    pub win_condition_change_enabled: bool,
 }
 
 impl Default for Config {
@@ -20,16 +22,16 @@ impl Default for Config {
             world_width: 300,
             world_height: 200,
             num_states: 5,
-            num_enemies: 2,
+            num_enemies: 0,
             perturbation_rate: 0.1,
+            perturbation_enabled: true,
             win_condition_change_rate: 0.05,
+            win_condition_change_enabled: true,
         }
     }
 }
 
 struct World {
-    width: usize,
-    height: usize,
     cells: Vec<usize>,
     random_permutation: Vec<usize>,
 }
@@ -44,16 +46,16 @@ impl CellAutomata {
     pub fn new(config: Config) -> Self {
         let mut rng = ::rand::thread_rng();
         let random_permutation = Self::random_permutation(&mut rng, config.num_states);
+        let mut config = config;
+        if config.num_enemies >= config.num_states || config.num_enemies == 0 {
+            config.num_enemies = (config.num_states - 1) / 2;
+        }
 
         CellAutomata {
             world: World {
-                width: config.world_width,
-                height: config.world_height,
                 cells: (0..config.world_width * config.world_height)
                     .map(|_| rng.gen_range(0..config.num_states))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap_or_else(|_| panic!("Failed to convert cells to array")),
+                    .collect::<Vec<_>>(),
                 random_permutation: random_permutation,
             },
             rng,
@@ -62,14 +64,11 @@ impl CellAutomata {
     }
 
     fn step(&mut self) {
-        let s = self.world.width * self.world.height;
-        let w = self.world.width;
-
         let mut next = World {
-            width: self.world.width,
-            height: self.world.height,
             cells: vec![0; self.config.world_width * self.config.world_height],
-            random_permutation: if self.rng.gen_bool(self.config.win_condition_change_rate) {
+            random_permutation: if self.config.win_condition_change_enabled
+                && self.rng.gen_bool(self.config.win_condition_change_rate)
+            {
                 Self::nudge_random_permutation(
                     &self.world.random_permutation,
                     &mut self.rng,
@@ -80,8 +79,10 @@ impl CellAutomata {
             },
         };
 
-        let win_condition =
-            Self::calc_win_condition(&self.world.random_permutation, self.config.num_states);
+        let win_condition = Self::calc_win_condition(&self.world.random_permutation);
+
+        let s = self.config.world_width * self.config.world_height;
+        let w = self.config.world_width;
 
         for i in 0..s {
             let mut neighbor_count = vec![0; self.config.num_states];
@@ -107,7 +108,9 @@ impl CellAutomata {
                 enemy = win_condition[enemy];
             }
 
-            let perturbation = if self.rng.gen_bool(self.config.perturbation_rate) {
+            let perturbation = if self.config.perturbation_enabled
+                && self.rng.gen_bool(self.config.perturbation_rate)
+            {
                 self.rng.gen_range(0..2)
             } else {
                 0
@@ -123,32 +126,32 @@ impl CellAutomata {
     }
 
     fn draw_world(&self) {
-        let width_scale = screen_width() / self.world.width as f32;
-        let height_scale = screen_height() / self.world.height as f32;
+        let width_scale = screen_width() / self.config.world_width as f32;
+        let height_scale = screen_height() / self.config.world_height as f32;
 
         let (scale, offset_x, offset_y) = if height_scale < width_scale {
             (
                 height_scale,
-                (screen_width() - self.world.width as f32 * height_scale) / 2.0,
+                (screen_width() - self.config.world_width as f32 * height_scale) / 2.0,
                 0.0,
             )
         } else {
             (
                 width_scale,
                 0.0,
-                (screen_height() - self.world.height as f32 * width_scale) / 2.0,
+                (screen_height() - self.config.world_height as f32 * width_scale) / 2.0,
             )
         };
 
         clear_background(BLACK);
-        for y in 0..self.world.height {
-            for x in 0..self.world.width {
+        for y in 0..self.config.world_height {
+            for x in 0..self.config.world_width {
                 draw_rectangle(
                     offset_x + (x as f32 * scale),
                     offset_y + (y as f32 * scale),
                     scale,
                     scale,
-                    match self.world.cells[y * self.world.width + x] {
+                    match self.world.cells[y * self.config.world_width + x] {
                         0 => PINK,
                         1 => BLUE,
                         2 => DARKBLUE,
@@ -181,10 +184,10 @@ impl CellAutomata {
         std::thread::sleep(Duration::from_secs_f64(1.0 / FPS));
     }
 
-    fn calc_win_condition(win_condition_raw: &Vec<usize>, num_states: usize) -> Vec<usize> {
-        let mut wincon = vec![0; num_states];
-        for i in 0..num_states {
-            wincon[win_condition_raw[i]] = win_condition_raw[(i + 1) % num_states];
+    fn calc_win_condition(win_condition_raw: &Vec<usize>) -> Vec<usize> {
+        let mut wincon = vec![0; win_condition_raw.len()];
+        for i in 0..win_condition_raw.len() {
+            wincon[win_condition_raw[i]] = win_condition_raw[(i + 1) % win_condition_raw.len()];
         }
         wincon
     }
