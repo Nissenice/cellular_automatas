@@ -4,43 +4,60 @@ use macroquad::prelude::*;
 use std::time::Duration;
 
 const FPS: f64 = 60.0;
-pub const WORLD_WIDTH: usize = 300;
-pub const WORLD_HEIGHT: usize = 200;
-const NUM_STATES: usize = 5;
-const NUM_ENEMIES: usize = 2;
 
-const PERTURBATION_RATE: f64 = 0.1;
-const WIN_CONDITION_CHANGE_RATE: f64 = 0.05;
+pub struct Config {
+    pub world_width: usize,
+    pub world_height: usize,
+    pub num_states: usize,
+    pub num_enemies: usize,
+    pub perturbation_rate: f64,
+    pub win_condition_change_rate: f64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            world_width: 300,
+            world_height: 200,
+            num_states: 5,
+            num_enemies: 2,
+            perturbation_rate: 0.1,
+            win_condition_change_rate: 0.05,
+        }
+    }
+}
 
 struct World {
     width: usize,
     height: usize,
-    cells: [usize; WORLD_WIDTH * WORLD_HEIGHT],
-    random_permutation: [usize; NUM_STATES],
+    cells: Vec<usize>,
+    random_permutation: Vec<usize>,
 }
 
 pub struct CellAutomata {
     world: World,
     rng: ThreadRng,
+    config: Config,
 }
 
 impl CellAutomata {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
         let mut rng = ::rand::thread_rng();
-        let random_permutation = Self::random_permutation(&mut rng);
+        let random_permutation = Self::random_permutation(&mut rng, config.num_states);
 
         CellAutomata {
             world: World {
-                width: WORLD_WIDTH,
-                height: WORLD_HEIGHT,
-                cells: (0..WORLD_WIDTH * WORLD_HEIGHT)
-                    .map(|_| rng.gen_range(0..NUM_STATES))
+                width: config.world_width,
+                height: config.world_height,
+                cells: (0..config.world_width * config.world_height)
+                    .map(|_| rng.gen_range(0..config.num_states))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap_or_else(|_| panic!("Failed to convert cells to array")),
                 random_permutation: random_permutation,
             },
             rng,
+            config,
         }
     }
 
@@ -51,18 +68,23 @@ impl CellAutomata {
         let mut next = World {
             width: self.world.width,
             height: self.world.height,
-            cells: [0; WORLD_WIDTH * WORLD_HEIGHT],
-            random_permutation: if self.rng.gen_bool(WIN_CONDITION_CHANGE_RATE) {
-                Self::nudge_random_permutation(&self.world.random_permutation, &mut self.rng)
+            cells: vec![0; self.config.world_width * self.config.world_height],
+            random_permutation: if self.rng.gen_bool(self.config.win_condition_change_rate) {
+                Self::nudge_random_permutation(
+                    &self.world.random_permutation,
+                    &mut self.rng,
+                    self.config.num_states,
+                )
             } else {
                 self.world.random_permutation.clone()
             },
         };
 
-        let win_condition = Self::calc_win_condition(&self.world.random_permutation);
+        let win_condition =
+            Self::calc_win_condition(&self.world.random_permutation, self.config.num_states);
 
         for i in 0..s {
-            let mut neighbor_count = [0; NUM_STATES];
+            let mut neighbor_count = vec![0; self.config.num_states];
 
             neighbor_count[self.world.cells[(s + i - w - 1) % s]] += 1; // up-left
             neighbor_count[self.world.cells[(s + i - w) % s]] += 1; // up
@@ -76,7 +98,7 @@ impl CellAutomata {
             let mut best_enemy = 0;
             let mut best_enemy_count = 0;
             let mut enemy = win_condition[self.world.cells[i]];
-            for _ in 0..NUM_ENEMIES {
+            for _ in 0..self.config.num_enemies {
                 let enemy_count = neighbor_count[enemy];
                 if enemy_count > best_enemy_count {
                     best_enemy = enemy;
@@ -85,7 +107,7 @@ impl CellAutomata {
                 enemy = win_condition[enemy];
             }
 
-            let perturbation = if self.rng.gen_bool(PERTURBATION_RATE) {
+            let perturbation = if self.rng.gen_bool(self.config.perturbation_rate) {
                 self.rng.gen_range(0..2)
             } else {
                 0
@@ -159,30 +181,31 @@ impl CellAutomata {
         std::thread::sleep(Duration::from_secs_f64(1.0 / FPS));
     }
 
-    fn calc_win_condition(win_condition_raw: &[usize; NUM_STATES]) -> [usize; NUM_STATES] {
-        let mut wincon = [0; NUM_STATES];
-        for i in 0..NUM_STATES {
-            wincon[win_condition_raw[i]] = win_condition_raw[(i + 1) % NUM_STATES];
+    fn calc_win_condition(win_condition_raw: &Vec<usize>, num_states: usize) -> Vec<usize> {
+        let mut wincon = vec![0; num_states];
+        for i in 0..num_states {
+            wincon[win_condition_raw[i]] = win_condition_raw[(i + 1) % num_states];
         }
         wincon
     }
 
     fn nudge_random_permutation(
-        permutation: &[usize; NUM_STATES],
+        permutation: &Vec<usize>,
         rng: &mut ThreadRng,
-    ) -> [usize; NUM_STATES] {
+        num_states: usize,
+    ) -> Vec<usize> {
         let mut permutation = permutation.clone();
-        let a = rng.gen_range(0..NUM_STATES);
-        permutation.swap(a, (a + 1) % NUM_STATES);
+        let a = rng.gen_range(0..num_states);
+        permutation.swap(a, (a + 1) % num_states);
         permutation
     }
 
-    fn random_permutation(rng: &mut ThreadRng) -> [usize; NUM_STATES] {
-        let mut permutation = [0; NUM_STATES];
-        for i in 0..NUM_STATES {
+    fn random_permutation(rng: &mut ThreadRng, num_states: usize) -> Vec<usize> {
+        let mut permutation = vec![0; num_states];
+        for i in 0..num_states {
             permutation[i] = i;
         }
-        for i in (1..NUM_STATES).rev() {
+        for i in (1..num_states).rev() {
             let j = rng.gen_range(0..=i);
             permutation.swap(i, j);
         }

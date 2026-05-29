@@ -2,13 +2,14 @@ use macroquad::prelude::*;
 use macroquad::window::Conf;
 
 mod automata;
-use automata::CellAutomata;
+use automata::{CellAutomata, Config};
 
 const INIT_SCALE: f32 = 8.0;
 
 fn window_conf() -> Conf {
-    let window_width = (automata::WORLD_WIDTH as f32 * INIT_SCALE) as i32;
-    let window_height = (automata::WORLD_HEIGHT as f32 * INIT_SCALE) as i32;
+    let config = Config::default();
+    let window_width = (config.world_width as f32 * INIT_SCALE) as i32;
+    let window_height = (config.world_height as f32 * INIT_SCALE) as i32;
 
     Conf {
         window_title: "Cell Automata".to_owned(),
@@ -22,6 +23,7 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut automata = CellAutomata::new();
+    let config = Config::default();
+    let mut automata = CellAutomata::new(config);
     automata.run().await;
 }
