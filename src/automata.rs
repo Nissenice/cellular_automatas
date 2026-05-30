@@ -3,7 +3,7 @@ use ::rand::rngs::ThreadRng;
 use macroquad::prelude::*;
 use std::time::Duration;
 
-const FPS: f64 = 60.0;
+const FPS: f64 = 30.0;
 
 pub struct Config {
     pub world_width: usize,
@@ -23,9 +23,9 @@ impl Default for Config {
             world_height: 200,
             num_states: 5,
             num_enemies: 0,
-            perturbation_rate: 0.1,
+            perturbation_rate: 0.3,
             perturbation_enabled: true,
-            win_condition_change_rate: 0.05,
+            win_condition_change_rate: 0.02,
             win_condition_change_enabled: true,
         }
     }
@@ -111,7 +111,7 @@ impl CellAutomata {
             let perturbation = if self.config.perturbation_enabled
                 && self.rng.gen_bool(self.config.perturbation_rate)
             {
-                self.rng.gen_range(0..2)
+                self.rng.gen_range(1..3)
             } else {
                 0
             };
