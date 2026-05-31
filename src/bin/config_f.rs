@@ -4,7 +4,7 @@ use cell_automata::window::window_conf;
 #[macroquad::main(window_conf)]
 async fn main() {
     let config = Config {
-        num_states: 9,
+        num_states: 11,
         win_condition_change_rate: 0.2,
         ..Default::default()
     };
