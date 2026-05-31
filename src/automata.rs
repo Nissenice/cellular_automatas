@@ -14,6 +14,7 @@ pub struct Config {
     pub perturbation_enabled: bool,
     pub win_condition_change_rate: f64,
     pub win_condition_change_enabled: bool,
+    pub repopulate_enabled: bool,
 }
 
 impl Default for Config {
@@ -27,6 +28,7 @@ impl Default for Config {
             perturbation_enabled: true,
             win_condition_change_rate: 0.02,
             win_condition_change_enabled: true,
+            repopulate_enabled: true,
         }
     }
 }
@@ -34,6 +36,7 @@ impl Default for Config {
 struct World {
     cells: Vec<usize>,
     random_permutation: Vec<usize>,
+    state_count: Vec<usize>,
 }
 
 pub struct CellAutomata {
@@ -53,10 +56,9 @@ impl CellAutomata {
 
         CellAutomata {
             world: World {
-                cells: (0..config.world_width * config.world_height)
-                    .map(|_| rng.gen_range(0..config.num_states))
-                    .collect::<Vec<_>>(),
+                cells: vec![0; config.world_width * config.world_height],
                 random_permutation: random_permutation,
+                state_count: vec![0; config.num_states],
             },
             rng,
             config,
@@ -77,6 +79,7 @@ impl CellAutomata {
             } else {
                 self.world.random_permutation.clone()
             },
+            state_count: vec![0; self.config.num_states],
         };
 
         let win_condition = Self::calc_win_condition(&self.world.random_permutation);
@@ -120,9 +123,13 @@ impl CellAutomata {
             } else {
                 next.cells[i] = self.world.cells[i];
             }
+            next.state_count[next.cells[i]] += 1;
         }
 
         self.world = next;
+        if self.config.repopulate_enabled {
+            self.repopulate();
+        }
     }
 
     fn draw_world(&self) {
@@ -163,7 +170,7 @@ impl CellAutomata {
                         8 => DARKPURPLE,
                         9 => BROWN,
                         10 => BEIGE,
-                        _ => RED,
+                        _ => BLACK,
                     },
                 );
             }
@@ -171,6 +178,13 @@ impl CellAutomata {
     }
 
     pub async fn run(&mut self) {
+        for _ in 0..100 {
+            let idx = self
+                .rng
+                .gen_range(0..self.config.world_width * self.config.world_height);
+            let state = self.rng.gen_range(0..self.config.num_states);
+            self.add_ball(idx, state, 20);
+        }
         loop {
             clear_background(BLACK);
             self.draw_world();
@@ -213,5 +227,41 @@ impl CellAutomata {
             permutation.swap(i, j);
         }
         permutation
+    }
+
+    fn repopulate(&mut self) {
+        for state in 0..self.config.num_states {
+            let count = self.world.state_count[state];
+            if count < 20 {
+                let i = self
+                    .rng
+                    .gen_range(0..self.config.world_width * self.config.world_height);
+                self.add_ball(i, state, 10);
+            }
+        }
+    }
+
+    fn add_ball(&mut self, i: usize, state: usize, rad: usize) {
+        let i = i as i32;
+        let w = self.config.world_width as i32;
+        let h = self.config.world_height as i32;
+
+        let r = rad as i32;
+        let x0 = i % w;
+        let y0 = i / w;
+
+        for dy in 0..=(2 * r + 1) {
+            for dx in 0..=(2 * r + 1) {
+                if (dx - r) * (dx - r) + (dy - r) * (dy - r) > r * r {
+                    continue;
+                }
+                let x = (x0 + dx) % w;
+                let y = (y0 + dy) % h;
+
+                let idx = (y * w + x) as usize;
+
+                self.world.cells[idx] = state;
+            }
+        }
     }
 }

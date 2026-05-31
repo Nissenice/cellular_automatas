@@ -5,7 +5,7 @@ use cell_automata::window::window_conf;
 async fn main() {
     let config = Config {
         num_states: 3,
-        perturbation_rate: 0.8,
+        perturbation_rate: 0.05,
         win_condition_change_rate: 0.05,
         ..Default::default()
     };
