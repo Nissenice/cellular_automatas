@@ -3,7 +3,7 @@ use ::rand::rngs::ThreadRng;
 use macroquad::prelude::*;
 use std::time::Duration;
 
-const FPS: f64 = 30.0;
+const FPS: f64 = 20.0;
 
 pub struct Config {
     pub world_width: usize,
@@ -87,6 +87,17 @@ impl CellAutomata {
         let s = self.config.world_width * self.config.world_height;
         let w = self.config.world_width;
 
+        let mut perturbation = vec![0; self.config.num_states];
+        if self.config.perturbation_enabled {
+            for state in 0..self.config.num_states {
+                perturbation[state] = if self.rng.gen_bool(self.config.perturbation_rate) {
+                    self.rng.gen_range(1..3)
+                } else {
+                    0
+                };
+            }
+        }
+
         for i in 0..s {
             let mut neighbor_count = vec![0; self.config.num_states];
 
@@ -111,14 +122,12 @@ impl CellAutomata {
                 enemy = win_condition[enemy];
             }
 
-            let perturbation = if self.config.perturbation_enabled
-                && self.rng.gen_bool(self.config.perturbation_rate)
-            {
-                self.rng.gen_range(1..3)
+            let pert = if self.config.perturbation_enabled {
+                perturbation[i % self.config.num_states]
             } else {
                 0
             };
-            if best_enemy_count >= 3 + perturbation {
+            if best_enemy_count >= 3 + pert {
                 next.cells[i] = best_enemy;
             } else {
                 next.cells[i] = self.world.cells[i];
